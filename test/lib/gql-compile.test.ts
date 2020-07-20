@@ -67,6 +67,28 @@ export const prepare = async (cwd: string) => {
     false,
   );
 
+  /**
+   */
+
+  /**
+   * 0. Shape of storage
+   * {
+   *   "userRelPath.tsx": {
+   *     "gqlContentHash1": "query{\n}",
+   *     "gqlContentHash2": "query{\n}",
+   *   }
+   * }
+   * 1. take care all multiple gql() in file. Check gqlContentHash and generate if not exists.
+   * 2. All done. remove all old dts.
+   * 3. Store the latest dts paths.
+   * 4. Print index.d.ts from the entire storage
+   *
+   * 5. Write .tsx to cacheDir
+   * 6. Import it from babel target by inserting a "import" line
+   *
+   * 7. Done.
+   */
+
   // const filename = rel('pages/index.tsx');
   // const ext = extname(filename);
   // const tsxFullPath = pathJoin(dirname(filename), `${basename(filename, ext)}-${gqlContentHash}${ext}`)
