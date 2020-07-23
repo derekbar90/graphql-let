@@ -13,13 +13,32 @@ import { stripIgnoredCharacters } from 'graphql';
 import { parse, ParserOptions } from '@babel/parser';
 import { readFile } from './file';
 import { join } from 'path';
-import createCodegenOpts from '../../src/lib/create-codegen-opts';
+// import createCodegenOpts from "../../src/lib/create-codegen-opts";
 import { writeFile } from './file';
 import { createHash } from './hash';
-import loadConfig from '../../src/lib/load-config';
+// import loadConfig from "../../src/lib/load-config";
 import { ConfigTypes } from './types';
 
 const packageJsonContent = JSON.stringify({ types: 'index' }, null, 2);
+
+export type CodegenContext = {
+  gqlContent: string;
+  strippedGqlContent: string;
+  gqlContentHash: string;
+  sourceRelPath: string;
+  sourceFullPath: string;
+  tsxRelPath: string;
+  tsxFullPath: string;
+  dtsRelPath: string;
+  dtsFullPath: string;
+}[];
+
+type CacheState = {
+  [hash: string]: string;
+};
+type CacheStateStore = {
+  [tsxRelPath: string]: CacheState;
+};
 
 // const [config, configHash] = await loadConfig(cwd, configFilePath);
 const config: ConfigTypes = {
@@ -124,37 +143,24 @@ function appendExportAsObject(dtsContent: string) {
   return code;
 }
 
-export default async function gqlCompile({
-  cwd,
-  dtsRelDir,
-  libRelDir,
-}: {
+type GqlCompileArg = {
   cwd: string;
   dtsRelDir: string;
   libRelDir: string;
-}) {
-  const abs = (relPath: string) => pathJoin(cwd, relPath);
+  sourceRelPath: string;
+};
 
-  // throw new Error()
-  // 'export declare type __ExportAsObject = {Maybe:Maybe,Exact:Exact,Omit:Omit,Scalars:Scalars,Query:Query,User:User,ViewerQueryVariables:ViewerQueryVariables,ViewerQuery:ViewerQuery,ViewerDocument:ViewerDocument,ViewerComponentProps:ViewerComponentProps,ViewerComponent:ViewerComponent,ViewerQueryHookResult:ViewerQueryHookResult,ViewerLazyQueryHookResult:ViewerLazyQueryHookResult,ViewerQueryResult:ViewerQueryResult};'
-
-  // Prepare
-  await mkdirp(join(cwd, dtsRelDir));
-  await writeFile(join(cwd, dtsRelDir, 'package.json'), packageJsonContent);
-
-  // Fixtures
-  const schemaHashFixture = '234';
-  const gqlContentsFixture = [
-    `query Viewer {
-    viewer {
-        id
-        name
-        status
-    }
-}`,
-  ];
-  const sourceRelPath = 'pages/index.tsx';
-
+export async function processGqlCompile(
+  cwd: string,
+  dtsRelDir: string,
+  libRelDir: string,
+  sourceRelPath: string,
+  schemaHash: string,
+  gqlContents: string[],
+  targetStore: CacheState,
+  codegenContext: CodegenContext,
+  skippedContext: CodegenContext,
+) {
   /**
    * 0. Shape of storage
    * {
@@ -174,31 +180,9 @@ export default async function gqlCompile({
    * 7. Done.
    */
 
-  // Processes inside a sub-process of babel-plugin
-  const storeFullPath = pathJoin(abs(dtsRelDir), 'store.json');
-  const store = existsSync(storeFullPath)
-    ? JSON.parse(await readFile(storeFullPath, 'utf-8'))
-    : {};
-  const targetStore = store[sourceRelPath] || (store[sourceRelPath] = {});
-
-  type CodegenContext = {
-    gqlContent: string;
-    strippedGqlContent: string;
-    gqlContentHash: string;
-    sourceRelPath: string;
-    sourceFullPath: string;
-    tsxRelPath: string;
-    tsxFullPath: string;
-    dtsRelPath: string;
-    dtsFullPath: string;
-  }[];
-
-  const codegenContext: CodegenContext = [];
-  const skippedContext: CodegenContext = [];
-
-  for (const gqlContent of gqlContentsFixture) {
+  for (const gqlContent of gqlContents) {
     const strippedGqlContent = stripIgnoredCharacters(gqlContent);
-    const gqlContentHash = createHash(schemaHashFixture + strippedGqlContent);
+    const gqlContentHash = createHash(schemaHash + strippedGqlContent);
     const context = {
       gqlContent,
       strippedGqlContent,
@@ -215,7 +199,7 @@ export default async function gqlCompile({
   // Codegen
   if (codegenContext.length) {
     for (const { strippedGqlContent, tsxFullPath } of codegenContext) {
-      await generate(
+      const [{ content }] = await generate(
         {
           cwd,
           schema: config.schema,
@@ -227,8 +211,10 @@ export default async function gqlCompile({
             },
           },
         },
-        true,
+        false,
       );
+      await mkdirp(dirname(tsxFullPath));
+      await writeFile(tsxFullPath, content);
     }
 
     // Dts
@@ -248,6 +234,41 @@ export default async function gqlCompile({
       await writeFile(dtsFullPath, content);
     }
   }
+}
+
+export default async function gqlCompile(
+  cwd: string,
+  dtsRelDir: string,
+  libRelDir: string,
+  sourceRelPath: string,
+  schemaHash: string,
+  gqlContents: string[],
+) {
+  const codegenContext: CodegenContext = [];
+  const skippedContext: CodegenContext = [];
+
+  // Processes inside a sub-process of babel-plugin
+  const storeFullPath = pathJoin(cwd, dtsRelDir, 'store.json');
+  const store = existsSync(storeFullPath)
+    ? JSON.parse(await readFile(storeFullPath, 'utf-8'))
+    : {};
+  const targetStore = store[sourceRelPath] || (store[sourceRelPath] = {});
+
+  // Prepare
+  await mkdirp(join(cwd, dtsRelDir));
+  await writeFile(join(cwd, dtsRelDir, 'package.json'), packageJsonContent);
+
+  await processGqlCompile(
+    cwd,
+    dtsRelDir,
+    libRelDir,
+    sourceRelPath,
+    schemaHash,
+    gqlContents,
+    targetStore,
+    codegenContext,
+    skippedContext,
+  );
 
   // Remove old caches
   for (const { gqlContentHash } of skippedContext) {
@@ -265,7 +286,7 @@ export default async function gqlCompile({
   }
 
   // Update index.d.ts
-  const dtsEntryFullPath = pathJoin(abs(dtsRelDir), 'index.d.ts');
+  const dtsEntryFullPath = pathJoin(cwd, dtsRelDir, 'index.d.ts');
   const writeStream = createWriteStream(dtsEntryFullPath);
   for (const { gqlContent, gqlContentHash, dtsRelPath } of codegenContext) {
     const chunk = `import T${gqlContentHash} from './${dtsRelPath}';
@@ -276,38 +297,4 @@ export declare function gql(gql: \`${gqlContent}\`): T${gqlContentHash}.__AllExp
 
   // Update storeJson
   await writeFile(storeFullPath, JSON.stringify(store, null, 2));
-
-  //       const gqlContent = stripIgnoredCharacters(`query Viewer {
-  //     viewer {
-  //         id
-  //         name
-  //         status
-  //     }
-  // }`);
-
-  // const gqlHash = createHash(schemaHashFixture + gqlContent);
-
-  // const [ { content } ] = await generate(
-  //   {
-  //     cwd,
-  //     schema: config.schema,
-  //     documents: [ gqlContent ],
-  //
-  //     generates: {
-  //       "boom.tsx": {
-  //         plugins: config.plugins,
-  //         config: config.config
-  //       }
-  //     }
-  //   },
-  //   false
-  // );
-
-  // await writeFile('out.tsx', content)
-
-  // const ast = parse(content, {
-  //     sourceType: "module",
-  //     plugins: [ "typescript", "jsx" ]
-  //   });
-  // console.log(ast);
 }
