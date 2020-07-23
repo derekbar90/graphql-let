@@ -10,10 +10,6 @@ import mkdirp from 'mkdirp';
 import { stripIgnoredCharacters } from 'graphql';
 import { parse } from '@babel/parser';
 import { readFile } from '../__tools/file';
-
-const cwd = pathJoin(__dirname, '../__fixtures/gql-compile');
-const rel = (relPath: string) => pathJoin(cwd, relPath);
-
 import { join } from 'path';
 import createCodegenOpts from '../../src/lib/create-codegen-opts';
 import { writeFile } from '../../src/lib/file';
@@ -21,6 +17,9 @@ import { processGraphQLCodegen } from '../../src/lib/graphql-codegen';
 import { createHash } from '../../src/lib/hash';
 import loadConfig from '../../src/lib/load-config';
 import { ConfigTypes } from '../../src/lib/types';
+
+const cwd = pathJoin(__dirname, '../__fixtures/gql-compile');
+const rel = (relPath: string) => pathJoin(cwd, relPath);
 
 const dtsRelDir = 'node_modules/@types/graphql-let';
 const libRelDir = 'node_modules/graphql-let';
