@@ -148,12 +148,19 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
         const sourceRelPath = relative(cwd, sourceFullPath);
 
         const tagNames: string[] = [];
-        const pendingDeletion: any[] = [];
+        const pendingDeletion: {
+          defaultSpecifier:
+            | t.ImportSpecifier
+            | t.ImportDefaultSpecifier
+            | t.ImportNamespaceSpecifier;
+          path: NodePath<t.ImportDeclaration>;
+        }[] = [];
         const gqlCallExpressionPaths: [
           NodePath<t.CallExpression>,
           string,
         ][] = [];
         const uniqueId = programPath.scope.generateUidIdentifier('unique');
+        const uniqueId2 = programPath.scope.generateUidIdentifier('unique');
         const uniqueUsed = false;
         let hasError = false;
 
@@ -166,7 +173,7 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
                 : pathValue === importName
             ) {
               const defaultSpecifier = path.node.specifiers.find(
-                (specifier: any) => {
+                (specifier) => {
                   return isImportDefaultSpecifier(specifier);
                 },
               );
@@ -266,22 +273,13 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
             } else {
               // TODO what's going on
               pathForDeletion.node.specifiers = pathForDeletion.node.specifiers.filter(
-                (specifier: any) => {
+                (specifier) => {
                   return specifier !== defaultSpecifier;
                 },
               );
             }
           }
         }
-
-        // if (uniqueUsed) {
-        //   programPath.unshiftContainer(
-        //     'body',
-        //     variableDeclaration('const', [
-        //       variableDeclarator(uniqueId, cloneDeep(uniqueFn)),
-        //     ]),
-        //   );
-        // }
       },
     },
   };
