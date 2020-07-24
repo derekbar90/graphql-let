@@ -36,21 +36,9 @@ export type GqlCodegenContext = {
 type CacheState = {
   [hash: string]: string;
 };
+
 type CacheStateStore = {
   [tsxRelPath: string]: CacheState;
-};
-
-// const [config, configHash] = await loadConfig(cwd, configFilePath);
-const config: ConfigTypes = {
-  schema: 'schema/type-defs.graphqls',
-  plugins: ['typescript', 'typescript-operations', 'typescript-react-apollo'],
-  documents: [],
-  respectGitIgnore: true,
-  config: {
-    reactApolloVersion: '3',
-    withHOC: false,
-    withHooks: true,
-  },
 };
 
 const getPaths = (
@@ -125,6 +113,7 @@ function appendExportAsObject(dtsContent: string) {
         const pairs = exportNames.map((e) => `${e}:${e}`).join(',');
         traverse(
           parse(
+            // TODO: "declare" needed?
             `export declare type __AllExports = { ${pairs} };`,
             parserOption,
           ),
@@ -145,6 +134,7 @@ function appendExportAsObject(dtsContent: string) {
 
 export async function processGqlCompile(
   cwd: string,
+  config: ConfigTypes,
   dtsRelDir: string,
   cacheRelDir: string,
   sourceRelPath: string,
@@ -194,6 +184,7 @@ export async function processGqlCompile(
     for (const { strippedGqlContent, tsxFullPath } of codegenContext) {
       const [{ content }] = await generate(
         {
+          silent: true, // Necessary to pass stdout to the parent process
           cwd,
           schema: config.schema,
           documents: [strippedGqlContent],
@@ -236,6 +227,7 @@ export type GqlCompileArgs = {
   sourceRelPath: string;
   schemaHash: string;
   gqlContents: string[];
+  config: ConfigTypes;
 };
 
 export async function gqlCompile(
@@ -243,6 +235,7 @@ export async function gqlCompile(
 ): Promise<GqlCodegenContext> {
   const {
     cwd,
+    config,
     dtsRelDir,
     cacheRelDir,
     sourceRelPath,
@@ -269,6 +262,7 @@ export async function gqlCompile(
 
   await processGqlCompile(
     cwd,
+    config,
     dtsRelDir,
     cacheRelDir,
     sourceRelPath,
@@ -299,7 +293,7 @@ export async function gqlCompile(
   const writeStream = createWriteStream(dtsEntryFullPath);
   for (const { gqlContent, gqlContentHash, dtsRelPath } of codegenContext) {
     const chunk = `import T${gqlContentHash} from './${dtsRelPath}';
-export declare function gql(gql: \`${gqlContent}\`): T${gqlContentHash}.__AllExports;
+export default function gql(gql: \`${gqlContent}\`): T${gqlContentHash}.__AllExports;
 `;
     await new Promise((resolve) => writeStream.write(chunk, resolve));
   }

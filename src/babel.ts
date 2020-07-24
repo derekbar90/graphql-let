@@ -5,6 +5,7 @@ import { declare } from '@babel/helper-plugin-utils';
 // import { parseExpression } from '@babel/parser';
 import doSync from 'do-sync';
 import createDebug from 'debug';
+import createCodegenOpts from './lib/create-codegen-opts';
 import { readFile, readFileSync } from './lib/file';
 import { GqlCodegenContext, GqlCompileArgs } from './lib/gql-compile';
 import { createHash } from './lib/hash';
@@ -57,7 +58,16 @@ const ensureConfig = (() => {
       return [config, schemaHash];
     }
     const [_config, configHash] = loadConfigSync(cwd, configFilePath);
-    config = _config;
+    // TODO: refactor with create-codegen-opts.ts
+    config = {
+      ..._config,
+      config: {
+        withHOC: false, // True by default
+        withHooks: true, // False by default
+        ..._config.config,
+      },
+    };
+
     schemaHash = configHash;
     if (shouldGenResolverTypes(config)) {
       const fileSchema = config.schema as string;
@@ -172,14 +182,17 @@ const configFunction = (
 
         // TODO: Handle error
 
+        if (!gqlCallExpressionPaths.length) return;
+
         const rv: GqlCodegenContext = gqlCompileSync({
           hostDirname: __dirname,
           cwd,
           sourceRelPath,
           gqlContents: gqlCallExpressionPaths.map(([_, value]) => value),
-          cacheRelDir,
+          cacheRelDir, // TODO: Include in config
           dtsRelDir: 'node_modules/@types/graphql-let', // TODO
           schemaHash,
+          config: graphqlLetConfig,
         });
         if (gqlCallExpressionPaths.length !== rv.length)
           throw new Error('what');
@@ -202,8 +215,6 @@ const configFunction = (
           programPath.unshiftContainer('body', importNode);
           callExpressionPath.replaceWithSourceString(localVarName);
         }
-
-        console.log(rv);
 
         // Only delete import statement or specifier when there is no error
         if (!hasError) {

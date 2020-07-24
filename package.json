@@ -16,13 +16,11 @@
     "bin",
     "dist",
     "schema",
-    "loader.js"
+    "loader.js",
+    "babel.js",
+    "index.d.ts"
   ],
   "dependencies": {
-    "@babel/helper-plugin-utils": "^7.10.4",
-    "@babel/helper-transform-fixture-test-runner": "^7.10.5",
-    "@babel/parser": "^7.10.5",
-    "babel-literal-to-ast": "^2.1.0",
     "debug": "^4.1.1",
     "do-sync": "^2.2.0",
     "globby": "^11.0.0",
@@ -38,6 +36,9 @@
     "@apollo/react-components": "^3.1.3",
     "@apollo/react-hooks": "^3.1.3",
     "@babel/core": "^7.10.5",
+    "@babel/helper-plugin-utils": "^7.10.4",
+    "@babel/helper-transform-fixture-test-runner": "^7.10.5",
+    "@babel/parser": "^7.10.5",
     "@babel/plugin-syntax-jsx": "^7.10.4",
     "@babel/preset-env": "^7.8.4",
     "@babel/preset-react": "^7.10.4",
