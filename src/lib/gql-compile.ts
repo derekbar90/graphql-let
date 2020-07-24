@@ -298,3 +298,11 @@ export declare function gql(gql: \`${gqlContent}\`): T${gqlContentHash}.__AllExp
   // Update storeJson
   await writeFile(storeFullPath, JSON.stringify(store, null, 2));
 }
+
+export function timeout(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({ yeah: 'yeah ohhhh xxxx' });
+    }, ms);
+  });
+}
