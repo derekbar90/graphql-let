@@ -1,6 +1,6 @@
 import { generate } from '@graphql-codegen/cli';
 // import { Types } from "@graphql-codegen/plugin-helpers";
-import traverse from '@babel/traverse';
+import traverse, { NodePath } from '@babel/traverse';
 import makeDir from 'make-dir';
 import { join as pathJoin, extname, basename, dirname } from 'path';
 import { existsSync } from 'fs';
@@ -19,6 +19,7 @@ import { createHash } from './hash';
 import memoize from './memoize';
 // import loadConfig from "../../src/lib/load-config";
 import { ConfigTypes } from './types';
+import * as t from '@babel/types';
 
 const packageJsonContent = JSON.stringify({ types: 'index' }, null, 2);
 
@@ -94,37 +95,41 @@ const parserOption: ParserOptions = {
 import generator from '@babel/generator';
 
 function appendExportAsObject(dtsContent: string) {
-  const exportNames: string[] = [];
-
-  function pushExportNames({ node }: any) {
-    exportNames.push(node.id.name);
-  }
+  // TODO: Build ast
+  // TODO: "declare" needed?
+  let allExportsCode = `export declare type __AllExports = { `;
+  const visitors: any = {
+    TSDeclareFunction({
+      node: {
+        id: { name },
+      },
+    }: any) {
+      allExportsCode += `${name}: typeof ${name},`;
+    },
+  };
+  visitors.VariableDeclarator = visitors.TSTypeAliasDeclaration = function pushProps({
+    node: {
+      id: { name },
+    },
+  }: any) {
+    allExportsCode += `${name}: ${name},`;
+  };
 
   const dtsAST = parse(dtsContent, parserOption);
   traverse(dtsAST, {
     ExportNamedDeclaration(path: any) {
-      path.traverse({
-        VariableDeclarator: pushExportNames,
-        TSTypeAliasDeclaration: pushExportNames,
-        TSDeclareFunction: pushExportNames,
-      });
+      path.traverse(visitors);
     },
     Program: {
-      exit(path) {
-        const pairs = exportNames.map((e) => `${e}:${e}`).join(',');
-        traverse(
-          parse(
-            // TODO: "declare" needed?
-            `export declare type __AllExports = { ${pairs} };`,
-            parserOption,
-          ),
-          {
-            ExportNamedDeclaration({ node }) {
-              const body = path.get('body');
-              body[body.length - 1].insertAfter(node);
-            },
+      exit(path: NodePath<t.Program>) {
+        allExportsCode += '};';
+        // TODO: refactor
+        traverse(parse(allExportsCode, parserOption), {
+          ExportNamedDeclaration({ node }) {
+            const body = path.get('body');
+            body[body.length - 1].insertAfter(node);
           },
-        );
+        });
       },
     },
   });
