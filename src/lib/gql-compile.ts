@@ -16,6 +16,7 @@ import { join } from 'path';
 // import createCodegenOpts from "../../src/lib/create-codegen-opts";
 import { writeFile } from './file';
 import { createHash } from './hash';
+import memoize from './memoize';
 // import loadConfig from "../../src/lib/load-config";
 import { ConfigTypes } from './types';
 
@@ -142,7 +143,8 @@ export async function processGqlCompile(
   gqlContents: string[],
   targetStore: CacheState,
   codegenContext: GqlCodegenContext,
-  skippedContext: GqlCodegenContext,
+  // skippedContext: GqlCodegenContext,
+  oldGqlContentHashes: Set<string>,
 ) {
   /**
    * 0. Shape of storage
@@ -162,6 +164,7 @@ export async function processGqlCompile(
    *
    * 7. Done.
    */
+  const newGqlCodegenContext: GqlCodegenContext = [];
 
   for (const gqlContent of gqlContents) {
     const strippedGqlContent = stripIgnoredCharacters(gqlContent);
@@ -172,51 +175,53 @@ export async function processGqlCompile(
       gqlContentHash,
       ...getPaths(sourceRelPath, gqlContentHash, dtsRelDir, cacheRelDir, cwd),
     };
-    if (targetStore[gqlContentHash]) {
-      skippedContext.push(context);
-    } else {
-      codegenContext.push(context);
+    if (!targetStore[gqlContentHash]) {
+      newGqlCodegenContext.push(context);
     }
+    // Push all for later use
+    codegenContext.push(context);
+    // Old caches left will be removed
+    oldGqlContentHashes.delete(gqlContentHash);
   }
 
+  if (!newGqlCodegenContext.length) return;
+
   // Codegen
-  if (codegenContext.length) {
-    for (const { strippedGqlContent, tsxFullPath } of codegenContext) {
-      const [{ content }] = await generate(
-        {
-          silent: true, // Necessary to pass stdout to the parent process
-          cwd,
-          schema: config.schema,
-          documents: [strippedGqlContent],
-          generates: {
-            [tsxFullPath]: {
-              plugins: config.plugins,
-              config: config.config,
-            },
+  for (const { strippedGqlContent, tsxFullPath } of newGqlCodegenContext) {
+    const [{ content }] = await generate(
+      {
+        silent: true, // Necessary to pass stdout to the parent process
+        cwd,
+        schema: config.schema,
+        documents: [strippedGqlContent],
+        generates: {
+          [tsxFullPath]: {
+            plugins: config.plugins,
+            config: config.config,
           },
         },
-        false,
-      );
-      await mkdirp(dirname(tsxFullPath));
-      await writeFile(tsxFullPath, content);
-    }
-
-    // Dts
-    const dtsContents = genDts(
-      codegenContext.map(({ tsxFullPath }) => tsxFullPath),
-      config,
+      },
+      false,
     );
-    await makeDir(dirname(codegenContext[0].dtsFullPath));
-    for (const [i, dtsContent] of dtsContents.entries()) {
-      const {
-        dtsFullPath,
-        strippedGqlContent,
-        gqlContentHash,
-      } = codegenContext[i]!;
-      targetStore[gqlContentHash] = strippedGqlContent;
-      const content = appendExportAsObject(dtsContent);
-      await writeFile(dtsFullPath, content);
-    }
+    await mkdirp(dirname(tsxFullPath));
+    await writeFile(tsxFullPath, content);
+  }
+
+  // Dts only for newly created `.tsx`s
+  const dtsContents = genDts(
+    newGqlCodegenContext.map(({ tsxFullPath }) => tsxFullPath),
+    config,
+  );
+  await makeDir(dirname(newGqlCodegenContext[0].dtsFullPath));
+  for (const [i, dtsContent] of dtsContents.entries()) {
+    const {
+      dtsFullPath,
+      strippedGqlContent,
+      gqlContentHash,
+    } = newGqlCodegenContext[i]!;
+    targetStore[gqlContentHash] = strippedGqlContent;
+    const content = appendExportAsObject(dtsContent);
+    await writeFile(dtsFullPath, content);
   }
 }
 
@@ -229,6 +234,13 @@ export type GqlCompileArgs = {
   gqlContents: string[];
   config: ConfigTypes;
 };
+
+// It's still troublesome even it's babel-plugin in SSR applicaiton like Next.js
+// where multiple webpack transpile handles a single source file.
+const memoizedProcessGqlCompile = memoize(
+  processGqlCompile,
+  (_cwd, _config, _dtsRelDir, _cacheRelDir, sourceRelPath) => sourceRelPath,
+);
 
 export async function gqlCompile(
   gqlCompileArgs: GqlCompileArgs,
@@ -243,7 +255,7 @@ export async function gqlCompile(
     gqlContents,
   } = gqlCompileArgs;
   const codegenContext: GqlCodegenContext = [];
-  const skippedContext: GqlCodegenContext = [];
+  // const skippedContext: GqlCodegenContext = [];
 
   // Processes inside a sub-process of babel-plugin
   const storeFullPath = pathJoin(cwd, dtsRelDir, 'store.json');
@@ -251,16 +263,17 @@ export async function gqlCompile(
     ? JSON.parse(await readFile(storeFullPath, 'utf-8'))
     : {};
   const targetStore = store[sourceRelPath] || (store[sourceRelPath] = {});
+  const oldGqlContentHashes = new Set(Object.keys(targetStore));
 
   // Prepare
   await Promise.all([
     await mkdirp(join(cwd, dtsRelDir)),
     await mkdirp(join(cwd, cacheRelDir)),
   ]);
-  // TODO: Need this?
+  // TODO: Need this? I think I don't
   // await writeFile(join(cwd, dtsRelDir, "package.json"), packageJsonContent);
 
-  await processGqlCompile(
+  await memoizedProcessGqlCompile(
     cwd,
     config,
     dtsRelDir,
@@ -270,15 +283,16 @@ export async function gqlCompile(
     gqlContents,
     targetStore,
     codegenContext,
-    skippedContext,
+    // skippedContext,
+    oldGqlContentHashes,
   );
 
   // Remove old caches
-  for (const { gqlContentHash } of skippedContext) {
-    delete targetStore[gqlContentHash];
+  for (const oldGqlContentHash of oldGqlContentHashes) {
+    delete targetStore[oldGqlContentHash];
     const { dtsFullPath } = getPaths(
       sourceRelPath,
-      gqlContentHash,
+      oldGqlContentHash,
       dtsRelDir,
       cacheRelDir,
       cwd,
@@ -301,7 +315,7 @@ export default function gql(gql: \`${gqlContent}\`): T${gqlContentHash}.__AllExp
   // Update storeJson
   await writeFile(storeFullPath, JSON.stringify(store, null, 2));
 
-  return codegenContext.concat(skippedContext);
+  return codegenContext;
 }
 
 export function timeout(ms: number) {
