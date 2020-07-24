@@ -1,23 +1,34 @@
-import { types, ConfigAPI, PluginObj } from '@babel/core';
+import { types, ConfigAPI, PluginObj, NodePath } from '@babel/core';
+import * as t from '@babel/types';
+import { relative, dirname } from 'path';
 import { declare } from '@babel/helper-plugin-utils';
 import { parseExpression } from '@babel/parser';
+import doSync from 'do-sync';
 // import parseLiteral from 'babel-literal-to-ast';
 // import gql from 'graphql-tag';
-// import createDebug from 'debug';
+import createDebug from 'debug';
+import { GqlCodegenContext, GqlCompileArgs } from './lib/gql-compile';
 // import { stripIgnoredCharacters } from 'graphql';
 
-// const debug = createDebug('babel-plugin-graphql-tag');
-// const {
-//   // cloneDeep,
-//   // isIdentifier,
-//   // isMemberExpression,
-//   // isImportDefaultSpecifier,
-//   // variableDeclaration,
-//   // variableDeclarator,
-//   // memberExpression,
-//   // callExpression,
-//   // identifier,
-// } = types;
+// import * as xx from './lib/file';
+
+// const { readFile } = xx;
+
+const debug = createDebug('babel-plugin-graphql-tag');
+const {
+  cloneDeep,
+  isIdentifier,
+  isMemberExpression,
+  isImportDefaultSpecifier,
+  variableDeclaration,
+  variableDeclarator,
+  memberExpression,
+  callExpression,
+  identifier,
+  importDeclaration,
+  importNamespaceSpecifier,
+  valueToNode,
+} = types;
 
 // eslint-disable-next-line no-restricted-syntax
 const uniqueFn = parseExpression(`
@@ -38,33 +49,38 @@ const uniqueFn = parseExpression(`
   }
 `);
 
-import doSync from 'do-sync';
-const timeoutSync = doSync(async (hostDirname: string) => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { join } = require('path');
-  const modulePath = join(hostDirname, '../dist/lib/gql-compile');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { timeout } = require(modulePath);
+const gqlCompileSync = doSync(
+  async ({
+    hostDirname,
+    ...gqlCompileArgs
+  }: GqlCompileArgs & { hostDirname: string }) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { join } = require('path');
+    const modulePath = join(hostDirname, '../dist/lib/gql-compile');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { gqlCompile } = require(modulePath);
+    return await gqlCompile(gqlCompileArgs);
+  },
+);
 
-  return await timeout(1000);
-});
+// function compile(...args: any[]): any {}
 
 const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
   api.assertVersion(7);
   const {
     importName = 'graphql-let',
-    // onlyMatchImportSuffix = false,
+    onlyMatchImportSuffix = false,
     // strip = false,
   } = options;
 
-  return {
-    visitor: {
-      Program(_path: any) {
-        const x = timeoutSync(__dirname);
-        console.log(x);
-      },
-    },
-  };
+  // return {
+  //   visitor: {
+  //     Program(_path: any) {
+  //       const x = timeoutSync(__dirname);
+  //       console.log(x);
+  //     },
+  //   },
+  // };
 
   // const compile = (path: any, uniqueId) => {
   //   const source = path.node.quasis.reduce((head, quasi) => {
@@ -124,89 +140,150 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
   //   return [body, uniqueUsed];
   // };
 
-  // return {
-  //   visitor: {
-  //     Program(programPath: any) {
-  //       const tagNames: string[] = [];
-  //       const pendingDeletion: any[] = [];
-  //       const uniqueId = programPath.scope.generateUidIdentifier('unique');
-  //       let uniqueUsed = false;
-  //       let hasError = false;
-  //
-  //       programPath.traverse({
-  //         ImportDeclaration(path: any) {
-  //           const pathValue = path.node.source.value;
-  //           if (
-  //             onlyMatchImportSuffix
-  //               ? pathValue.endsWith(importName)
-  //               : pathValue === importName
-  //           ) {
-  //             const defaultSpecifier = path.node.specifiers.find(
-  //               (specifier) => {
-  //                 return isImportDefaultSpecifier(specifier);
-  //               },
-  //             );
-  //
-  //             if (defaultSpecifier) {
-  //               tagNames.push(defaultSpecifier.local.name);
-  //               pendingDeletion.push({
-  //                 defaultSpecifier,
-  //                 path,
-  //               });
-  //             }
-  //           }
-  //         },
-  //         TaggedTemplateExpression(path: any) {
-  //           if (
-  //             tagNames.some((name) => {
-  //               return isIdentifier(path.node.tag, { name });
-  //             })
-  //           ) {
-  //             try {
-  //               debug('quasi', path.node.quasi);
-  //               const [body, used] = compile(path.get('quasi'), uniqueId);
-  //
-  //               uniqueUsed = uniqueUsed || used;
-  //
-  //               path.replaceWith(body);
-  //             } catch (error) {
-  //               // eslint-disable-next-line no-console
-  //               console.error('error', error);
-  //               hasError = true;
-  //             }
-  //           }
-  //         },
-  //       });
-  //
-  //       // Only delete import statement or specifier when there is no error
-  //       if (!hasError) {
-  //         for (const {
-  //           defaultSpecifier,
-  //           path: pathForDeletion,
-  //         } of pendingDeletion) {
-  //           if (pathForDeletion.node.specifiers.length === 1) {
-  //             pathForDeletion.remove();
-  //           } else {
-  //             pathForDeletion.node.specifiers = pathForDeletion.node.specifiers.filter(
-  //               (specifier) => {
-  //                 return specifier !== defaultSpecifier;
-  //               },
-  //             );
-  //           }
-  //         }
-  //       }
-  //
-  //       if (uniqueUsed) {
-  //         programPath.unshiftContainer(
-  //           'body',
-  //           variableDeclaration('const', [
-  //             variableDeclarator(uniqueId, cloneDeep(uniqueFn)),
-  //           ]),
-  //         );
-  //       }
-  //     },
-  //   },
-  // };
+  return {
+    visitor: {
+      Program(programPath: NodePath<t.Program>, state: any) {
+        const { cwd } = state;
+        const sourceFullPath = state.file.opts.filename;
+        const sourceRelPath = relative(cwd, sourceFullPath);
+
+        const tagNames: string[] = [];
+        const pendingDeletion: any[] = [];
+        const gqlCallExpressionPaths: [
+          NodePath<t.CallExpression>,
+          string,
+        ][] = [];
+        const uniqueId = programPath.scope.generateUidIdentifier('unique');
+        const uniqueUsed = false;
+        let hasError = false;
+
+        programPath.traverse({
+          ImportDeclaration(path: NodePath<t.ImportDeclaration>) {
+            const pathValue = path.node.source.value;
+            if (
+              onlyMatchImportSuffix
+                ? pathValue.endsWith(importName)
+                : pathValue === importName
+            ) {
+              const defaultSpecifier = path.node.specifiers.find(
+                (specifier: any) => {
+                  return isImportDefaultSpecifier(specifier);
+                },
+              );
+
+              if (defaultSpecifier) {
+                tagNames.push(defaultSpecifier.local.name);
+                pendingDeletion.push({
+                  defaultSpecifier,
+                  path,
+                });
+              }
+            }
+          },
+          CallExpression(path: NodePath<t.CallExpression>) {
+            if (
+              tagNames.some((name) => {
+                return isIdentifier(path.node.callee, { name });
+              })
+            ) {
+              try {
+                const args = path.get('arguments');
+                if (args.length !== 1)
+                  throw new Error(
+                    `The argument must be a single string value.`,
+                  );
+                let value = '';
+                path.traverse({
+                  TemplateLiteral(path: NodePath<t.TemplateLiteral>) {
+                    if (path.node.quasis.length !== 1)
+                      throw new Error(
+                        `TemplateLiteral of the argument must not contain arguments.`,
+                      );
+                    value = path.node.quasis[0].value.raw;
+                  },
+                  StringLiteral(path: NodePath<t.StringLiteral>) {
+                    value = path.node.value;
+                  },
+                });
+                if (!value) throw new Error('never');
+                gqlCallExpressionPaths.push([path, value]);
+                // debug('quasi', path.node.quasi);
+                // const [body, used] = compile(path.get('quasi'), uniqueId);
+                // uniqueUsed = uniqueUsed || used;
+                // path.replaceWith(body);
+              } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error('error', error);
+                hasError = true;
+              }
+            }
+          },
+        });
+
+        // TODO: Handle error
+
+        const rv: GqlCodegenContext = gqlCompileSync({
+          cwd,
+          sourceRelPath,
+          hostDirname: __dirname,
+          gqlContents: gqlCallExpressionPaths.map(([_, value]) => value),
+          libRelDir: 'node_modules/graphql-let',
+          dtsRelDir: 'node_modules/@types/graphql-let',
+          schemaHash: 'TODO',
+        });
+        if (gqlCallExpressionPaths.length !== rv.length)
+          throw new Error('what');
+
+        for (const [
+          i,
+          [callExpressionPath],
+        ] of gqlCallExpressionPaths.entries()) {
+          const { gqlContentHash, tsxFullPath } = rv[i]!;
+          const tsxRelPathFromSource =
+            './' + relative(dirname(sourceFullPath), tsxFullPath);
+
+          const localVarName = `V${gqlContentHash}`;
+
+          const importNode = importDeclaration(
+            [importNamespaceSpecifier(identifier(localVarName))],
+            valueToNode(tsxRelPathFromSource),
+          );
+
+          programPath.unshiftContainer('body', importNode);
+          callExpressionPath.replaceWithSourceString(localVarName);
+        }
+
+        console.log(rv);
+
+        // Only delete import statement or specifier when there is no error
+        if (!hasError) {
+          for (const {
+            defaultSpecifier,
+            path: pathForDeletion,
+          } of pendingDeletion) {
+            if (pathForDeletion.node.specifiers.length === 1) {
+              pathForDeletion.remove();
+            } else {
+              pathForDeletion.node.specifiers = pathForDeletion.node.specifiers.filter(
+                (specifier: any) => {
+                  return specifier !== defaultSpecifier;
+                },
+              );
+            }
+          }
+        }
+
+        if (uniqueUsed) {
+          programPath.unshiftContainer(
+            'body',
+            variableDeclaration('const', [
+              variableDeclarator(uniqueId, cloneDeep(uniqueFn)),
+            ]),
+          );
+        }
+      },
+    },
+  };
 };
 
 export default declare(configFunction);

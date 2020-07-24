@@ -1,7 +1,10 @@
 import { deepStrictEqual, ok } from 'assert';
 import { join as pathJoin } from 'path';
 import { rimraf } from '../../src/lib/file';
-import { CodegenContext, processGqlCompile } from '../../src/lib/gql-compile';
+import {
+  GqlCodegenContext,
+  processGqlCompile,
+} from '../../src/lib/gql-compile';
 
 const dtsRelDir = 'node_modules/@types/graphql-let';
 const libRelDir = 'node_modules/graphql-let';
@@ -26,8 +29,8 @@ describe('gql-compile', () => {
     }
 }`,
       ];
-      const codegenContext: CodegenContext = [];
-      const skippedContext: CodegenContext = [];
+      const codegenContext: GqlCodegenContext = [];
+      const skippedContext: GqlCodegenContext = [];
 
       await processGqlCompile(
         cwd,

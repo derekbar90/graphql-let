@@ -21,7 +21,7 @@ import { ConfigTypes } from './types';
 
 const packageJsonContent = JSON.stringify({ types: 'index' }, null, 2);
 
-export type CodegenContext = {
+export type GqlCodegenContext = {
   gqlContent: string;
   strippedGqlContent: string;
   gqlContentHash: string;
@@ -143,13 +143,6 @@ function appendExportAsObject(dtsContent: string) {
   return code;
 }
 
-type GqlCompileArg = {
-  cwd: string;
-  dtsRelDir: string;
-  libRelDir: string;
-  sourceRelPath: string;
-};
-
 export async function processGqlCompile(
   cwd: string,
   dtsRelDir: string,
@@ -158,8 +151,8 @@ export async function processGqlCompile(
   schemaHash: string,
   gqlContents: string[],
   targetStore: CacheState,
-  codegenContext: CodegenContext,
-  skippedContext: CodegenContext,
+  codegenContext: GqlCodegenContext,
+  skippedContext: GqlCodegenContext,
 ) {
   /**
    * 0. Shape of storage
@@ -236,16 +229,25 @@ export async function processGqlCompile(
   }
 }
 
-export default async function gqlCompile(
-  cwd: string,
-  dtsRelDir: string,
-  libRelDir: string,
-  sourceRelPath: string,
-  schemaHash: string,
-  gqlContents: string[],
-) {
-  const codegenContext: CodegenContext = [];
-  const skippedContext: CodegenContext = [];
+export type GqlCompileArgs = {
+  cwd: string;
+  dtsRelDir: string;
+  libRelDir: string;
+  sourceRelPath: string;
+  schemaHash: string;
+  gqlContents: string[];
+};
+
+export async function gqlCompile({
+  cwd,
+  dtsRelDir,
+  libRelDir,
+  sourceRelPath,
+  schemaHash,
+  gqlContents,
+}: GqlCompileArgs): Promise<GqlCodegenContext> {
+  const codegenContext: GqlCodegenContext = [];
+  const skippedContext: GqlCodegenContext = [];
 
   // Processes inside a sub-process of babel-plugin
   const storeFullPath = pathJoin(cwd, dtsRelDir, 'store.json');
@@ -255,8 +257,12 @@ export default async function gqlCompile(
   const targetStore = store[sourceRelPath] || (store[sourceRelPath] = {});
 
   // Prepare
-  await mkdirp(join(cwd, dtsRelDir));
-  await writeFile(join(cwd, dtsRelDir, 'package.json'), packageJsonContent);
+  await Promise.all([
+    await mkdirp(join(cwd, dtsRelDir)),
+    await mkdirp(join(cwd, libRelDir)),
+  ]);
+  // TODO: Need this?
+  // await writeFile(join(cwd, dtsRelDir, "package.json"), packageJsonContent);
 
   await processGqlCompile(
     cwd,
@@ -297,6 +303,8 @@ export declare function gql(gql: \`${gqlContent}\`): T${gqlContentHash}.__AllExp
 
   // Update storeJson
   await writeFile(storeFullPath, JSON.stringify(store, null, 2));
+
+  return codegenContext.concat(skippedContext);
 }
 
 export function timeout(ms: number) {

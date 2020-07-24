@@ -12,6 +12,10 @@ module.exports = {
     'plugin:prettier/recommended',
   ],
 
+  ignorePatterns: [
+    'test/__fixtures/gql/**'
+  ],
+
   env: {
     jest: true,
   },

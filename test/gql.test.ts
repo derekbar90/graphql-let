@@ -1,9 +1,11 @@
 import { join } from 'path';
 import runner from '@babel/helper-transform-fixture-test-runner';
+import { rimraf } from './__tools/file';
 
-runner(
-  join(__dirname, '__fixtures/gql'),
-  'gql',
-  {},
-  { sourceType: 'unambiguous' },
-);
+const cwd = join(__dirname, '__fixtures/gql');
+
+beforeAll(async () => {
+  await rimraf(join(cwd, '**/node_modules'));
+});
+
+runner(cwd, 'gql', {}, { sourceType: 'unambiguous' });

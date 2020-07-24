@@ -1,7 +1,6 @@
 {
   "plugins": [
-    [
-      "../../../../../src/gql.ts"
-    ]
+    "../../../../../src/gql.ts",
+    "@babel/plugin-syntax-jsx"
   ]
 }

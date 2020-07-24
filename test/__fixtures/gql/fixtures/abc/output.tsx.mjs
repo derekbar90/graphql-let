@@ -1,4 +1,4 @@
-import * as V481393 from "./node_modules/graphql-let/__generated__/input-481393.tsx";
+import * as V481393 from "../node_modules/graphql-let/__generated__/input-481393.tsx";
 // @ts-ignore
 const {
   useViewerQuery
