@@ -106,7 +106,7 @@ function appendExportAsObject(dtsContent: string) {
       path.traverse({
         VariableDeclarator: pushExportNames,
         TSTypeAliasDeclaration: pushExportNames,
-        FunctionDeclaration: pushExportNames,
+        TSDeclareFunction: pushExportNames,
       });
     },
     Program: {

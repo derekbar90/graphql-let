@@ -17,8 +17,7 @@
     "dist",
     "schema",
     "loader.js",
-    "babel.js",
-    "index.d.ts"
+    "babel.js"
   ],
   "dependencies": {
     "debug": "^4.1.1",
