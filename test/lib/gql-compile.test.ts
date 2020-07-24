@@ -87,7 +87,7 @@ describe('gql-compile', () => {
           'graphql-let/test/__fixtures/gql-compile/node_modules/@types/graphql-let/pages/index-dd28f9.d.ts',
         ),
       );
-      deepStrictEqual(oldGqlContentHashes, []);
+      deepStrictEqual(oldGqlContentHashes.size, 0);
     },
     1000 * 1000,
   );
