@@ -264,6 +264,7 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
             if (pathForDeletion.node.specifiers.length === 1) {
               pathForDeletion.remove();
             } else {
+              // TODO what's going on
               pathForDeletion.node.specifiers = pathForDeletion.node.specifiers.filter(
                 (specifier: any) => {
                   return specifier !== defaultSpecifier;
@@ -273,14 +274,14 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
           }
         }
 
-        if (uniqueUsed) {
-          programPath.unshiftContainer(
-            'body',
-            variableDeclaration('const', [
-              variableDeclarator(uniqueId, cloneDeep(uniqueFn)),
-            ]),
-          );
-        }
+        // if (uniqueUsed) {
+        //   programPath.unshiftContainer(
+        //     'body',
+        //     variableDeclaration('const', [
+        //       variableDeclarator(uniqueId, cloneDeep(uniqueFn)),
+        //     ]),
+        //   );
+        // }
       },
     },
   };
