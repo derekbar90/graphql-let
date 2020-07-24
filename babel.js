@@ -1,1 +1,1 @@
-module.exports = require('./dist/gql').default;
+module.exports = require('./dist/babel').default;
