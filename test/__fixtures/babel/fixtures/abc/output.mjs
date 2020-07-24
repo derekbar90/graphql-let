@@ -1,8 +1,8 @@
-import * as V481393 from "./node_modules/graphql-let/__generated__/input-481393.tsx";
+import * as V07138c from "./node_modules/graphql-let/__generated__/input-07138c.tsx";
 // @ts-ignore
 const {
   useViewerQuery
-} = V481393;
+} = V07138c;
 export default function Viewer() {
   const {
     data

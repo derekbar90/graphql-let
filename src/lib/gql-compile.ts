@@ -57,12 +57,12 @@ const getPaths = (
   sourceRelPath: string,
   hash: string,
   dtsRelDir: string,
-  libRelDir: string,
+  cacheRelDir: string,
   cwd: string,
 ) => {
   const abs = (relPath: string) => pathJoin(cwd, relPath);
 
-  const tsxGenFullDir = pathJoin(abs(libRelDir), '__generated__');
+  const tsxGenFullDir = abs(cacheRelDir);
   const dtsGenFullDir = abs(dtsRelDir);
   // sourceRelPath: "pages/index.tsx"
   // "pages"
@@ -146,7 +146,7 @@ function appendExportAsObject(dtsContent: string) {
 export async function processGqlCompile(
   cwd: string,
   dtsRelDir: string,
-  libRelDir: string,
+  cacheRelDir: string,
   sourceRelPath: string,
   schemaHash: string,
   gqlContents: string[],
@@ -180,7 +180,7 @@ export async function processGqlCompile(
       gqlContent,
       strippedGqlContent,
       gqlContentHash,
-      ...getPaths(sourceRelPath, gqlContentHash, dtsRelDir, libRelDir, cwd),
+      ...getPaths(sourceRelPath, gqlContentHash, dtsRelDir, cacheRelDir, cwd),
     };
     if (targetStore[gqlContentHash]) {
       skippedContext.push(context);
@@ -232,20 +232,23 @@ export async function processGqlCompile(
 export type GqlCompileArgs = {
   cwd: string;
   dtsRelDir: string;
-  libRelDir: string;
+  cacheRelDir: string;
   sourceRelPath: string;
   schemaHash: string;
   gqlContents: string[];
 };
 
-export async function gqlCompile({
-  cwd,
-  dtsRelDir,
-  libRelDir,
-  sourceRelPath,
-  schemaHash,
-  gqlContents,
-}: GqlCompileArgs): Promise<GqlCodegenContext> {
+export async function gqlCompile(
+  gqlCompileArgs: GqlCompileArgs,
+): Promise<GqlCodegenContext> {
+  const {
+    cwd,
+    dtsRelDir,
+    cacheRelDir,
+    sourceRelPath,
+    schemaHash,
+    gqlContents,
+  } = gqlCompileArgs;
   const codegenContext: GqlCodegenContext = [];
   const skippedContext: GqlCodegenContext = [];
 
@@ -259,7 +262,7 @@ export async function gqlCompile({
   // Prepare
   await Promise.all([
     await mkdirp(join(cwd, dtsRelDir)),
-    await mkdirp(join(cwd, libRelDir)),
+    await mkdirp(join(cwd, cacheRelDir)),
   ]);
   // TODO: Need this?
   // await writeFile(join(cwd, dtsRelDir, "package.json"), packageJsonContent);
@@ -267,7 +270,7 @@ export async function gqlCompile({
   await processGqlCompile(
     cwd,
     dtsRelDir,
-    libRelDir,
+    cacheRelDir,
     sourceRelPath,
     schemaHash,
     gqlContents,
@@ -283,7 +286,7 @@ export async function gqlCompile({
       sourceRelPath,
       gqlContentHash,
       dtsRelDir,
-      libRelDir,
+      cacheRelDir,
       cwd,
     );
     if (existsSync(dtsFullPath)) {

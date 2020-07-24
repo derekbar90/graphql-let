@@ -1,19 +1,19 @@
 import { types, ConfigAPI, PluginObj, NodePath } from '@babel/core';
 import * as t from '@babel/types';
-import { relative, dirname } from 'path';
+import { relative, dirname, join as pathJoin } from 'path';
 import { declare } from '@babel/helper-plugin-utils';
-import { parseExpression } from '@babel/parser';
+// import { parseExpression } from '@babel/parser';
 import doSync from 'do-sync';
-// import parseLiteral from 'babel-literal-to-ast';
 import createDebug from 'debug';
+import { readFile, readFileSync } from './lib/file';
 import { GqlCodegenContext, GqlCompileArgs } from './lib/gql-compile';
-// import { stripIgnoredCharacters } from 'graphql';
+import { createHash } from './lib/hash';
+import { loadConfigSync } from './lib/load-config';
+import { shouldGenResolverTypes } from './lib/resolver-types';
+import { ConfigTypes } from './lib/types';
+import { libDir as libFullDir } from './lib/paths';
 
-// import * as xx from './lib/file';
-
-// const { readFile } = xx;
-
-const debug = createDebug('babel-plugin-graphql-tag');
+const debug = createDebug('graphql-let/babel');
 const {
   // cloneDeep,
   isIdentifier,
@@ -29,25 +29,6 @@ const {
   valueToNode,
 } = types;
 
-// eslint-disable-next-line no-restricted-syntax
-const uniqueFn = parseExpression(`
-  (definitions) => {
-    const names = {};
-    return definitions.filter(definition => {
-      if (definition.kind !== 'FragmentDefinition') {
-        return true;
-      }
-      const name = definition.name.value;
-      if (names[name]) {
-        return false;
-      } else {
-        names[name] = true;
-        return true;
-      }
-    });
-  }
-`);
-
 const gqlCompileSync = doSync(
   async ({
     hostDirname,
@@ -62,82 +43,45 @@ const gqlCompileSync = doSync(
   },
 );
 
-// function compile(...args: any[]): any {}
+export type BabelOptions = {
+  configFilePath?: string;
+  importName?: string;
+  onlyMatchImportSuffix?: boolean;
+};
 
-const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
+const ensureConfig = (() => {
+  let config: ConfigTypes | null = null;
+  let schemaHash: string | null = null;
+  return (cwd: string, configFilePath: string): [ConfigTypes, string] => {
+    if (config && schemaHash) {
+      return [config, schemaHash];
+    }
+    const [_config, configHash] = loadConfigSync(cwd, configFilePath);
+    config = _config;
+    schemaHash = configHash;
+    if (shouldGenResolverTypes(config)) {
+      const fileSchema = config.schema as string;
+      const schemaFullPath = pathJoin(cwd, fileSchema);
+      const content = readFileSync(schemaFullPath);
+      schemaHash = createHash(schemaHash + content);
+    }
+    return [config, schemaHash];
+  };
+})();
+
+// With all my respect, I cloned the source from
+// https://github.com/gajus/babel-plugin-graphql-tag/blob/master/src/index.js
+const configFunction = (
+  api: ConfigAPI,
+  options: BabelOptions,
+): PluginObj<any> => {
   api.assertVersion(7);
   const {
+    configFilePath = '',
     importName = 'graphql-let',
     onlyMatchImportSuffix = false,
     // strip = false,
   } = options;
-
-  // return {
-  //   visitor: {
-  //     Program(_path: any) {
-  //       const x = timeoutSync(__dirname);
-  //       console.log(x);
-  //     },
-  //   },
-  // };
-
-  // const compile = (path: any, uniqueId) => {
-  //   const source = path.node.quasis.reduce((head, quasi) => {
-  //     return head + quasi.value.raw;
-  //   }, '');
-  //
-  //   const expressions = path.get('expressions');
-  //
-  //   expressions.forEach((expr) => {
-  //     if (!isIdentifier(expr) && !isMemberExpression(expr)) {
-  //       throw expr.buildCodeFrameError(
-  //         'Only identifiers or member expressions are allowed by this plugin as an interpolation in a graphql template literal.',
-  //       );
-  //     }
-  //   });
-  //
-  //   debug('compiling a GraphQL query', source);
-  //
-  //   const queryDocument = gql(strip ? stripIgnoredCharacters(source) : source);
-  //
-  //   // If a document contains only one operation, that operation may be unnamed:
-  //   // https://facebook.github.io/graphql/#sec-Language.Query-Document
-  //   if (queryDocument.definitions.length > 1) {
-  //     for (const definition of queryDocument.definitions) {
-  //       if (!definition.name) {
-  //         throw new Error('GraphQL query must have name.');
-  //       }
-  //     }
-  //   }
-  //
-  //   const body = parseLiteral(queryDocument);
-  //   let uniqueUsed = false;
-  //
-  //   if (expressions.length) {
-  //     const definitionsProperty = body.properties.find((property) => {
-  //       return property.key.value === 'definitions';
-  //     });
-  //
-  //     const definitionsArray = definitionsProperty.value;
-  //
-  //     const extraDefinitions = expressions.map((expr) => {
-  //       return memberExpression(expr.node, identifier('definitions'));
-  //     });
-  //
-  //     const allDefinitions = callExpression(
-  //       memberExpression(definitionsArray, identifier('concat')),
-  //       extraDefinitions,
-  //     );
-  //
-  //     definitionsProperty.value = callExpression(uniqueId, [allDefinitions]);
-  //
-  //     uniqueUsed = true;
-  //   }
-  //
-  //   debug('created a static representation', body);
-  //
-  //   return [body, uniqueUsed];
-  // };
 
   return {
     visitor: {
@@ -145,6 +89,13 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
         const { cwd } = state;
         const sourceFullPath = state.file.opts.filename;
         const sourceRelPath = relative(cwd, sourceFullPath);
+
+        const [graphqlLetConfig, schemaHash] = ensureConfig(
+          cwd,
+          configFilePath,
+        );
+        const cacheRelDir =
+          graphqlLetConfig.cacheDir || 'node_modules/graphql-let/__generated__'; // TODO: refactor
 
         const tagNames: string[] = [];
         const pendingDeletion: {
@@ -222,13 +173,13 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
         // TODO: Handle error
 
         const rv: GqlCodegenContext = gqlCompileSync({
+          hostDirname: __dirname,
           cwd,
           sourceRelPath,
-          hostDirname: __dirname,
           gqlContents: gqlCallExpressionPaths.map(([_, value]) => value),
-          libRelDir: 'node_modules/graphql-let',
-          dtsRelDir: 'node_modules/@types/graphql-let',
-          schemaHash: 'TODO',
+          cacheRelDir,
+          dtsRelDir: 'node_modules/@types/graphql-let', // TODO
+          schemaHash,
         });
         if (gqlCallExpressionPaths.length !== rv.length)
           throw new Error('what');

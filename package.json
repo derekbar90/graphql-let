@@ -11,6 +11,7 @@
   "bin": {
     "graphql-let": "bin/graphql-let.js"
   },
+  "main": "index.js",
   "files": [
     "bin",
     "dist",
