@@ -13,7 +13,8 @@ module.exports = {
   ],
 
   ignorePatterns: [
-    'test/__fixtures/gql/**'
+    'test/__fixtures/babel/**/input.tsx',
+    'test/__fixtures/babel/**/output.mjs',
   ],
 
   env: {

@@ -5,7 +5,6 @@ import { declare } from '@babel/helper-plugin-utils';
 import { parseExpression } from '@babel/parser';
 import doSync from 'do-sync';
 // import parseLiteral from 'babel-literal-to-ast';
-// import gql from 'graphql-tag';
 import createDebug from 'debug';
 import { GqlCodegenContext, GqlCompileArgs } from './lib/gql-compile';
 // import { stripIgnoredCharacters } from 'graphql';
@@ -16,14 +15,14 @@ import { GqlCodegenContext, GqlCompileArgs } from './lib/gql-compile';
 
 const debug = createDebug('babel-plugin-graphql-tag');
 const {
-  cloneDeep,
+  // cloneDeep,
   isIdentifier,
-  isMemberExpression,
+  // isMemberExpression,
   isImportDefaultSpecifier,
-  variableDeclaration,
-  variableDeclarator,
-  memberExpression,
-  callExpression,
+  // variableDeclaration,
+  // variableDeclarator,
+  // memberExpression,
+  // callExpression,
   identifier,
   importDeclaration,
   importNamespaceSpecifier,
@@ -159,9 +158,6 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
           NodePath<t.CallExpression>,
           string,
         ][] = [];
-        const uniqueId = programPath.scope.generateUidIdentifier('unique');
-        const uniqueId2 = programPath.scope.generateUidIdentifier('unique');
-        const uniqueUsed = false;
         let hasError = false;
 
         programPath.traverse({
@@ -214,10 +210,6 @@ const configFunction = (api: ConfigAPI, options: any): PluginObj<any> => {
                 });
                 if (!value) throw new Error('never');
                 gqlCallExpressionPaths.push([path, value]);
-                // debug('quasi', path.node.quasi);
-                // const [body, used] = compile(path.get('quasi'), uniqueId);
-                // uniqueUsed = uniqueUsed || used;
-                // path.replaceWith(body);
               } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error('error', error);
