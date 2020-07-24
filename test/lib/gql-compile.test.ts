@@ -5,11 +5,24 @@ import {
   GqlCodegenContext,
   processGqlCompile,
 } from '../../src/lib/gql-compile';
+import { ConfigTypes } from '../../src/lib/types';
 
 const dtsRelDir = 'node_modules/@types/graphql-let';
 const libRelDir = 'node_modules/graphql-let';
 
 const cwd = pathJoin(__dirname, '../__fixtures/gql-compile');
+
+const config: ConfigTypes = {
+  schema: 'schema/type-defs.graphqls',
+  plugins: ['typescript', 'typescript-operations', 'typescript-react-apollo'],
+  documents: [],
+  respectGitIgnore: true,
+  config: {
+    reactApolloVersion: '3',
+    withHOC: false,
+    withHooks: true,
+  },
+};
 
 describe('gql-compile', () => {
   beforeAll(async () => {
@@ -30,10 +43,12 @@ describe('gql-compile', () => {
 }`,
       ];
       const codegenContext: GqlCodegenContext = [];
-      const skippedContext: GqlCodegenContext = [];
+      const oldGqlContentHashes = new Set<string>();
+      // const skippedContext: GqlCodegenContext = [];
 
       await processGqlCompile(
         cwd,
+        config,
         dtsRelDir,
         pathJoin(libRelDir, '__generated__'),
         sourceRelPath,
@@ -41,7 +56,8 @@ describe('gql-compile', () => {
         gqlContents,
         {},
         codegenContext,
-        skippedContext,
+        oldGqlContentHashes,
+        // skippedContext,
       );
 
       deepStrictEqual(
@@ -71,7 +87,7 @@ describe('gql-compile', () => {
           'graphql-let/test/__fixtures/gql-compile/node_modules/@types/graphql-let/pages/index-dd28f9.d.ts',
         ),
       );
-      deepStrictEqual(skippedContext, []);
+      deepStrictEqual(oldGqlContentHashes, []);
     },
     1000 * 1000,
   );
