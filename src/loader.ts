@@ -6,7 +6,6 @@ import { processDtsForContext } from './lib/dts';
 import createExecContext from './lib/exec-context';
 import loadConfig from './lib/config';
 import memoize from './lib/memoize';
-import { createPaths } from './lib/paths';
 import { createSchemaHash, shouldGenResolverTypes } from './lib/resolver-types';
 import { PRINT_PREFIX, updateLog } from './lib/print';
 import { readFile } from './lib/file';
